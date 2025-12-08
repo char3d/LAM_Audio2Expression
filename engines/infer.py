@@ -34,6 +34,7 @@ from utils.registry import Registry
 from utils.misc import (
     AverageMeter,
 )
+from utils.env import get_torch_device
 
 from models.utils import smooth_mouth_movements, apply_frame_blending, apply_savitzky_golay_smoothing, apply_random_brow_movement, \
     symmetrize_blendshapes, apply_random_eye_blinks, apply_random_eye_blinks_context, export_blendshape_animation, \
@@ -51,9 +52,11 @@ class InferBase:
         self.logger.info("=> Loading config ...")
         self.cfg = cfg
         self.verbose = verbose
+        self.device = get_torch_device()
         if self.verbose:
             self.logger.info(f"Save path: {cfg.save_path}")
             self.logger.info(f"Config:\n{cfg.pretty_text}")
+            self.logger.info(f"Using device: {self.device}")
         if model is None:
             self.logger.info("=> Building model ...")
             self.model = self.build_model()
@@ -65,13 +68,13 @@ class InferBase:
         n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
         self.logger.info(f"Num params: {n_parameters}")
         model = create_ddp_model(
-            model.cuda(),
+            model.to(self.device),
             broadcast_buffers=False,
             find_unused_parameters=self.cfg.find_unused_parameters,
         )
         if os.path.isfile(self.cfg.weight):
             self.logger.info(f"Loading weight at: {self.cfg.weight}")
-            checkpoint = torch.load(self.cfg.weight)
+            checkpoint = torch.load(self.cfg.weight, map_location="cpu")
             weight = OrderedDict()
             for key, value in checkpoint["state_dict"].items():
                 if key.startswith("module."):
@@ -101,7 +104,7 @@ class InferBase:
 class Audio2ExpressionInfer(InferBase):
     def infer(self):
         logger = get_root_logger()
-        logger.info(">>>>>>>>>>>>>>>> Start Inference >>>>>>>>>>>>>>>>")
+        logger.info(">>>>>>>>>>>>>>>>>> Start Inference >>>>>>>>>>>>>>>>>")
         batch_time = AverageMeter()
         self.model.eval()
 
@@ -117,9 +120,9 @@ class Audio2ExpressionInfer(InferBase):
         with torch.no_grad():
             input_dict = {}
             input_dict['id_idx'] = F.one_hot(torch.tensor(self.cfg.id_idx),
-                                             self.cfg.model.backbone.num_identity_classes).cuda(non_blocking=True)[None,...]
+                                             self.cfg.model.backbone.num_identity_classes).to(self.device)[None,...]
             speech_array, ssr = librosa.load(self.cfg.audio_input, sr=16000)
-            input_dict['input_audio_array'] = torch.FloatTensor(speech_array).cuda(non_blocking=True)[None,...]
+            input_dict['input_audio_array'] = torch.FloatTensor(speech_array).to(self.device)[None,...]
 
             end = time.time()
             output_dict = self.model(input_dict)
