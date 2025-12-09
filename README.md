@@ -55,8 +55,8 @@ sh ./scripts/install/install_cu118.sh
 # HuggingFace download
 # Download Assets and Model Weights
 huggingface-cli download 3DAIGC/LAM_audio2exp --local-dir ./
-tar -xzvf LAM_audio2exp_assets.tar && rm -f LAM_audio2exp_assets.tar
-tar -xzvf LAM_audio2exp_streaming.tar && rm -f LAM_audio2exp_streaming.tar
+  tar -xzvf LAM_audio2exp_assets.tar && rm -f LAM_audio2exp_assets.tar
+  tar -xzvf LAM_audio2exp_streaming.tar && rm -f LAM_audio2exp_streaming.tar
 
 # Or OSS Download (In case of HuggingFace download failing)
 # Download Assets
@@ -86,6 +86,28 @@ We provide a simple Gradio demo with **WebGL Render**, and you can get rendering
 ```
 python app_lam_audio2exp.py
 ```
+
+### API（仅保留已验证可用的接口）
+- Base: `http://127.0.0.1:7860/gradio_api/*`（所有路由在 `gradio_api` 命名空间下）
+- Info: `GET /gradio_api/info`（含 `named_endpoints`）
+- Async call: `POST /gradio_api/call/a2e_predict` → 返回 `event_id`
+- File: `GET /gradio_api/file=assets/...`（用于静态文件下载）
+
+请求体（组件对象格式，建议）：
+```json
+{
+  "data": [
+    {"path": "assets/sample_input/james.png"},
+    {"path": "assets/sample_audio/BarackObama_english.wav"},
+    ""
+  ]
+}
+```
+
+注意事项：
+- 当前环境下 `/gradio_api/run/a2e_predict` 返回 500（内部错误），暂不写入为可用接口。
+- 当前环境下 `/gradio_api/stream/...` 返回 404/405，未开放可用 SSE 流；不要在前端订阅。
+- 前端必须将请求发往后端端口 `7860`，不要向 `5173`（前端开发服务器）发起 API 请求。
 
 ### Inference
 ```bash

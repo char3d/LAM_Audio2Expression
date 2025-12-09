@@ -128,12 +128,12 @@ def create_zip_archive(output_zip='assets/arkitWithBSData.zip', base_dir=""):
         print(f"Remove previous file: {output_zip}")
     
     try:
-        # 创建压缩包
+        # 创建压缩包（使用 tar.gz 以便通过 Gradio 文件路由下载）
         patoolib.create_archive(
             archive=output_zip,
             filenames=[base_dir],  # 要压缩的目录
             verbosity=-1,         # 静默模式
-            program='zip'         # 指定使用zip格式
+            program='tar'         # 使用 tar，根据后缀生成 .tar.gz
         )
         print(f"Archive created successfully: {output_zip}")
     except Exception as e:
@@ -160,7 +160,7 @@ def demo_lam_audio2exp(infer, cfg):
         cfg.save_json_path = os.path.join("./assets/sample_lam", base_id, 'arkitWithBSData', 'bsData.json')
         infer.infer()
 
-        output_file_name = base_id+'_'+os.path.basename(audio_params).split(".")[0]+'.zip'
+        output_file_name = base_id+'_'+os.path.basename(audio_params).split(".")[0]+'.tar.gz'
         assetPrefix = 'gradio_api/file=assets/'
         output_file_path = os.path.join('./assets',output_file_name)
 
@@ -272,7 +272,7 @@ def demo_lam_audio2exp(infer, cfg):
             inputs=[input_image, audio_input, input_zip_textbox],
             outputs=[selected_audio, selected_render_file],
             api_name="a2e_predict",
-            queue=False,
+            queue=True,
         )
 
         submit.click(
