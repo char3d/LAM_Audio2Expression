@@ -125,7 +125,18 @@ class Audio2ExpressionInfer(InferBase):
             input_dict['input_audio_array'] = torch.FloatTensor(speech_array).to(self.device)[None,...]
 
             end = time.time()
-            output_dict = self.model(input_dict)
+            try:
+                output_dict = self.model(input_dict)
+            except NotImplementedError as e:
+                # Fallback to CPU if current backend (e.g., MPS) lacks op implementations
+                self.logger.warning(f"Backend op not implemented ({e}); falling back to CPU.")
+                self.device = torch.device("cpu")
+                self.model = self.model.to(self.device)
+                # Rebuild input tensors on CPU
+                input_dict['id_idx'] = F.one_hot(torch.tensor(self.cfg.id_idx),
+                                                 self.cfg.model.backbone.num_identity_classes).to(self.device)[None, ...]
+                input_dict['input_audio_array'] = torch.FloatTensor(speech_array).to(self.device)[None, ...]
+                output_dict = self.model(input_dict)
             batch_time.update(time.time() - end)
 
             logger.info(
@@ -201,13 +212,12 @@ class Audio2ExpressionInfer(InferBase):
             try:
                 input_dict = {}
                 input_dict['id_idx'] = F.one_hot(torch.tensor(self.cfg.id_idx),
-                                                 self.cfg.model.backbone.num_identity_classes).cuda(non_blocking=True)[
-                    None, ...]
-                input_dict['input_audio_array'] = torch.FloatTensor(input_audio).cuda(non_blocking=True)[None, ...]
+                                                 self.cfg.model.backbone.num_identity_classes).to(self.device)[None, ...]
+                input_dict['input_audio_array'] = torch.FloatTensor(input_audio).to(self.device)[None, ...]
                 output_dict = self.model(input_dict)
-                out_exp = output_dict['pred_exp'].squeeze().cpu().numpy()[start_frame:, :]
-            except:
-                self.logger.error('Error: faided to predict expression.')
+                out_exp = output_dict['pred_exp'].squeeze().detach().cpu().numpy()[start_frame:, :]
+            except Exception as e:
+                self.logger.error(f'Error: failed to predict expression: {e}')
                 output_dict['pred_exp'] = torch.zeros((max_frame_length, 52)).float()
                 return
 
@@ -271,11 +281,26 @@ class Audio2ExpressionInfer(InferBase):
         Returns:
             Path to isolated vocal track in WAV format
         """
-        separation_command = f'spleeter separate -p spleeter:2stems -o {self.cfg.save_path} {input_audio_path}'
-        os.system(separation_command)
+        import shutil, subprocess
+        if shutil.which("spleeter") is None:
+            self.logger.warning("spleeter not found, skipping vocal separation.")
+            return input_audio_path
+        separation_command = [
+            'spleeter', 'separate', '-p', 'spleeter:2stems',
+            '-o', self.cfg.save_path, input_audio_path
+        ]
+        try:
+            subprocess.run(separation_command, check=True)
+        except Exception as e:
+            self.logger.error(f"Vocal separation failed: {e}. Using original audio.")
+            return input_audio_path
 
         base_name = os.path.splitext(os.path.basename(input_audio_path))[0]
-        return os.path.join(self.cfg.save_path, base_name, 'vocals.wav')
+        vocal_path = os.path.join(self.cfg.save_path, base_name, 'vocals.wav')
+        if not os.path.exists(vocal_path):
+            self.logger.warning("Vocal file not produced; using original audio.")
+            return input_audio_path
+        return vocal_path
 
     def blendshape_postprocess(self,
                                bs_array: np.ndarray

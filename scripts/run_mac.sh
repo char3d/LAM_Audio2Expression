@@ -93,8 +93,20 @@ ${PYTHON_BIN} -m pip install -r requirements.txt
 log "Installing PyTorch (CPU/MPS) ..."
 ${PYTHON_BIN} -m pip install torch torchvision torchaudio
 
-# Allow MPS fallback if some ops are missing
+# Prefer CPU by default to avoid MPS conv1d NotImplemented on macOS
+export LAM_DEVICE=${LAM_DEVICE:-cpu}
+# Enable MPS fallback to CPU for unsupported ops
 export PYTORCH_ENABLE_MPS_FALLBACK=1
+
+# Install ffmpeg (for audio processing) and spleeter (optional vocal separation)
+if command -v conda >/dev/null 2>&1; then
+  conda install -y -c conda-forge ffmpeg || true
+else
+  if command -v brew >/dev/null 2>&1; then
+    brew install ffmpeg || true
+  fi
+fi
+${PYTHON_BIN} -m pip install --no-cache-dir spleeter || true
 
 # 4) Ensure assets & pretrained models exist
 if [[ ! -f "assets/sample_audio/BarackObama_english.wav" ]]; then

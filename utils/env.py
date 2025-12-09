@@ -38,11 +38,29 @@ def set_seed(seed=None):
 # New: unified device selector supporting Apple MPS, CUDA, and CPU
 def get_torch_device(prefer_mps: bool = True) -> torch.device:
     """
-    Returns a torch.device in the following priority:
-    1) MPS (Apple Silicon) if available and prefer_mps=True
-    2) CUDA if available
-    3) CPU
+    Returns a torch.device with the following priority, unless overridden:
+    - Override: env `LAM_DEVICE` in {cpu,cuda,mps}
+    - Default priority:
+      1) MPS (Apple Silicon) if available and prefer_mps=True
+      2) CUDA if available
+      3) CPU
     """
+    # Optional override via environment
+    env_dev = os.getenv("LAM_DEVICE", "").lower().strip()
+    if env_dev in {"cpu", "cuda", "mps"}:
+        if env_dev == "mps":
+            try:
+                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    return torch.device("mps")
+            except Exception:
+                pass
+            # If MPS not available, fallback to CPU
+            return torch.device("cpu")
+        if env_dev == "cuda" and torch.cuda.is_available():
+            return torch.device("cuda")
+        # If requested device not available, fallback to CPU
+        return torch.device("cpu")
+
     try:
         if prefer_mps and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
