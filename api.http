@@ -1,0 +1,72 @@
+# LAM-Audio2Expression API (Gradio v5)
+# 所有路由都在 `gradio_api` 命名空间下；旧版 `/api/...` 会 404。
+# Note: 本服务不暴露上传接口；请传入服务可读的本地相对路径（在仓库下的 `assets/...`）。
+# Note: 返回的文件路径形如 `gradio_api/file=assets/...`，前端需拼接为 `{{host}}/gradio_api/file=assets/...` 进行下载。
+
+@host = http://127.0.0.1:7860
+@image = assets/sample_input/james.png
+@audio = assets/sample_audio/BarackObama_english.wav
+@zip = 
+
+### 获取端点信息（含 named_endpoints）
+GET {{host}}/gradio_api/info
+
+### 同步预测：直接返回结果或错误
+POST {{host}}/gradio_api/run/a2e_predict
+Content-Type: application/json
+
+{
+  "data": ["{{image}}", "{{audio}}", "{{zip}}"]
+}
+
+### 异步预测：返回 event_id（前端订阅 SSE 流）
+POST {{host}}/gradio_api/call/a2e_predict
+Content-Type: application/json
+
+{
+  "data": ["{{image}}", "{{audio}}", "{{zip}}"]
+}
+
+# 说明：拿到 {"event_id":"..."} 后，在前端订阅 SSE：
+# GET {{host}}/gradio_api/stream/{event_id}
+# Header: Accept: text/event-stream
+# 注：部分命令行客户端对 SSE 支持有限，建议在浏览器或前端用 EventSource。
+
+### 下载示例文件（验证文件路由）
+GET {{host}}/gradio_api/file=assets/sample_audio/BarackObama_english.wav
+
+### 备用示例：更换图片/音频
+# POST {{host}}/gradio_api/run/a2e_predict
+# Content-Type: application/json
+#
+# {
+#   "data": [
+#     "assets/sample_input/messi.png",
+#     "assets/sample_audio/HillaryClinton_english.wav",
+#     ""
+#   ]
+# }
+#
+# 或：
+# {
+#   "data": [
+#     "assets/sample_input/barbara.jpg",
+#     "assets/sample_audio/Nangyanwen_chinese.wav",
+#     ""
+#   ]
+# }
+
+### 返回数据说明
+# 请求体格式：{"data":[image_path, audio_path, zip_path]}
+# - image_path: 必填，示例 "assets/sample_input/james.png"
+# - audio_path: 必填，示例 "assets/sample_audio/BarackObama_english.wav"
+# - zip_path: 可选，留空字符串 "" 或传 "assets/xxx.zip"
+# 返回：
+# - 同步 /run：若成功，返回选中的音频与渲染文件路径（位于 gradio_api/file=...）；若失败返回 500。
+# - 异步 /call：返回 {"event_id":"..."}，随后通过 SSE 流获取过程与结果。
+
+### 快速自测流程
+# 1) GET {{host}}/gradio_api/info 看到 named_endpoints 中包含 "/a2e_predict"。
+# 2) 同步：POST /gradio_api/run/a2e_predict 使用上面的示例数据。
+# 3) 若需要下载文件：将返回中的路径拼接为 {{host}}/gradio_api/file=assets/... 访问。
+

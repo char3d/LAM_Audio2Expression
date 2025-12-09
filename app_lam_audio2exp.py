@@ -260,6 +260,21 @@ def demo_lam_audio2exp(infer, cfg):
         selected_audio = gr.Textbox(visible=False)
         selected_render_file = gr.Textbox(visible=False)
 
+        # API endpoint: call core pipeline directly via REST
+        def api_core_fn(image_path: str, audio_path: str, input_zip_path: str = ""):
+            # Prepare working directory internally
+            wk = prepare_working_dir()
+            return core_fn(image_path, audio_path, wk, input_zip_path)
+
+        api_trigger = gr.Button(visible=False)
+        api_trigger.click(
+            fn=api_core_fn,
+            inputs=[input_image, audio_input, input_zip_textbox],
+            outputs=[selected_audio, selected_render_file],
+            api_name="a2e_predict",
+            queue=False,
+        )
+
         submit.click(
             fn=assert_input_image,
             inputs=[input_image,input_zip_textbox],
