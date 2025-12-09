@@ -16,3 +16,5 @@ TEMP/
 pretrained/
 **/*.out
 Dockerfile
+/.miniconda
+pretrained_models/lam_audio2exp_streaming.tar
