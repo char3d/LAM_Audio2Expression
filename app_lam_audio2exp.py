@@ -57,13 +57,13 @@ def get_image_base64(path):
     return f'data:image/png;base64,{encoded_string}'
 
 
-def do_render():
+def do_render(render_file):
     print('WebGL rendering ....')
-    return
+    return render_file
 
-def audio_loading():
+def audio_loading(audio_url):
     print("Audio loading ....")
-    return "None"
+    return audio_url
 
 def parse_configs():
     parser = argparse.ArgumentParser()
@@ -166,7 +166,11 @@ def demo_lam_audio2exp(infer, cfg):
 
         create_zip_archive(output_zip=output_file_path, base_dir=os.path.join("./assets/sample_lam", base_id))
 
-        return 'gradio_api/file='+audio_params, assetPrefix+output_file_name
+        audio_url = 'gradio_api/file='+audio_params
+        render_url = assetPrefix+output_file_name
+        print(f"Selected audio: {audio_url}")
+        print(f"Selected render file: {render_url}")
+        return audio_url, render_url
 
     with gr.Blocks(analytics_enabled=False) as demo:
         logo_url = './assets/images/logo.jpeg'
@@ -291,12 +295,14 @@ def demo_lam_audio2exp(infer, cfg):
             queue=False,
         ).success(
             fn=audio_loading,
+            inputs=[selected_audio],
             outputs=[selected_audio],
-            js='''(output_component) => window.loadAudio(output_component)'''
+            js='''(output_component, evt) => window.loadAudio(output_component, evt)'''
         ).success(
-            fn=do_render(),
+            fn=do_render,
+            inputs=[selected_render_file],
             outputs=[selected_render_file],
-            js='''(selected_render_file) => window.start(selected_render_file)'''
+            js='''(selected_render_file, evt) => window.start(selected_render_file, evt)'''
         )
 
         demo.queue()
