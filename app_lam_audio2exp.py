@@ -57,6 +57,18 @@ def get_image_base64(path):
     return f'data:image/png;base64,{encoded_string}'
 
 
+def list_examples_from_dir(dir_path, exts=("jpg","jpeg","png","webp")):
+    items = []
+    if os.path.isdir(dir_path):
+        for name in sorted(os.listdir(dir_path)):
+            p = os.path.join(dir_path, name)
+            if os.path.isfile(p):
+                ext = os.path.splitext(name)[1].lower().lstrip('.')
+                if ext in exts:
+                    items.append([p])
+    return items
+
+
 def do_render():
     print('WebGL rendering ....')
     return
@@ -146,18 +158,54 @@ def demo_lam_audio2exp(infer, cfg):
         if(os.path.exists(input_zip_textbox)):
             base_id = os.path.basename(input_zip_textbox).split(".")[0]
             output_dir = os.path.join('assets', 'sample_lam', base_id)
-            # unzip_dir
-            if (not os.path.exists(os.path.join(output_dir, 'arkitWithBSData'))):
+            os.makedirs(output_dir, exist_ok=True)
+            target_dir = os.path.join(output_dir, 'arkitWithBSData')
+            if (not os.path.exists(target_dir)):
                 run_command = 'unzip -d '+output_dir+' '+input_zip_textbox
                 os.system(run_command)
-                rename_command = 'mv '+os.path.join(output_dir,base_id)+' '+os.path.join(output_dir,'arkitWithBSData')
-                os.system(rename_command)
+
+                # try to locate avatar resource directory
+                def has_required_files(p):
+                    return os.path.exists(os.path.join(p, 'skin.glb')) and os.path.exists(os.path.join(p, 'vertex_order.json'))
+
+                candidate_dir = None
+                # 1) direct child dirs
+                for name in os.listdir(output_dir):
+                    p = os.path.join(output_dir, name)
+                    if os.path.isdir(p) and has_required_files(p):
+                        candidate_dir = p
+                        break
+                # 2) recurse if not found
+                if candidate_dir is None:
+                    for root, dirs, files in os.walk(output_dir):
+                        if 'skin.glb' in files and 'vertex_order.json' in files:
+                            candidate_dir = root
+                            break
+                # 3) if files at root
+                if candidate_dir is None and has_required_files(output_dir):
+                    candidate_dir = output_dir
+
+                # normalize to arkitWithBSData
+                import shutil
+                if candidate_dir is not None and os.path.abspath(candidate_dir) != os.path.abspath(target_dir):
+                    try:
+                        if not os.path.exists(target_dir):
+                            shutil.move(candidate_dir, target_dir)
+                        else:
+                            for fname in ['skin.glb','animation.glb','vertex_order.json','offset.ply']:
+                                src = os.path.join(candidate_dir, fname)
+                                if os.path.exists(src):
+                                    shutil.copy2(src, os.path.join(target_dir, fname))
+                    except Exception:
+                        pass
+                os.makedirs(target_dir, exist_ok=True)
         else:
             base_id = os.path.basename(image_path).split(".")[0]
 
         # set input audio
         cfg.audio_input = audio_params
         cfg.save_json_path = os.path.join("./assets/sample_lam", base_id, 'arkitWithBSData', 'bsData.json')
+        os.makedirs(os.path.dirname(cfg.save_json_path), exist_ok=True)
         infer.infer()
 
         output_file_name = base_id+'_'+os.path.basename(audio_params).split(".")[0]+'.zip'
@@ -197,19 +245,20 @@ def demo_lam_audio2exp(infer, cfg):
                                                    type='filepath',  # 'numpy',
                                                    elem_id='content_image',
                                                    interactive=False)
-                # EXAMPLES
-                with gr.Row():
-                    examples = [
-                        ['assets/sample_input/barbara.jpg'],
-                        ['assets/sample_input/status.png'],
-                        ['assets/sample_input/james.png'],
-                        ['assets/sample_input/vfhq_case1.png'],
-                    ]
-                    gr.Examples(
-                        examples=examples,
-                        inputs=[input_image],
-                        examples_per_page=20,
-                    )
+                        # EXAMPLES
+                        with gr.Row():
+                            _dynamic_examples = list_examples_from_dir('assets/sample_input')
+                            examples = _dynamic_examples if len(_dynamic_examples) > 0 else [
+                                ['assets/sample_input/barbara.jpg'],
+                                ['assets/sample_input/status.png'],
+                                ['assets/sample_input/james.png'],
+                                ['assets/sample_input/vfhq_case1.png'],
+                            ]
+                            gr.Examples(
+                                examples=examples,
+                                inputs=[input_image],
+                                examples_per_page=20,
+                            )
 
             with gr.Column():
                 with gr.Tabs(elem_id='lam_input_audio'):
